@@ -1,0 +1,3 @@
+This repository contains a patch containing automated tests to be applied to
+Speed Dreams. The Jenkins build pulls down this patch and applies it in order
+to run automated tests against the codebase.
