@@ -266,10 +266,10 @@ index 647632e87..d1d80dfc0 100644
        if (Sz <= Pz)
        {
 diff --git src/drivers/simplix/src/unitdriver.cpp src/drivers/simplix/src/unitdriver.cpp
-index 233ae79a9..9beb05404 100644
+index 24d7f1997..39c9610c1 100644
 --- src/drivers/simplix/src/unitdriver.cpp
 +++ src/drivers/simplix/src/unitdriver.cpp
-@@ -4249,7 +4249,7 @@ double TDriver::FilterBrakeSpeed(double	Brake)
+@@ -4251,7 +4251,7 @@ double TDriver::FilterBrakeSpeed(double	Brake)
  	if	(Param.Fix.oCa < 0.01)
  		return Brake;
  
