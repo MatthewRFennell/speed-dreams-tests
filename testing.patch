@@ -238,7 +238,7 @@ index 5067351a1..62be8550a 100755
 +#define SD_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}/"
  
 diff --git cmake/options.cmake cmake/options.cmake
-index 34387c293..4f7f82fd3 100644
+index 2ce930af2..3a215916a 100644
 --- cmake/options.cmake
 +++ cmake/options.cmake
 @@ -64,6 +64,8 @@ MACRO(ADD_SD_COMPILE_OPTIONS)
