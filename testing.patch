@@ -250,19 +250,6 @@ index 2ce930af2..3a215916a 100644
      SET(OPTION_FORCE_DEBUG false CACHE BOOL "Force debug symbols even in Release build (Automatic in Debug builds)")
  
      SET(OPTION_TRACE true CACHE BOOL "Enable traces into the console or log file")
-diff --git data/config/webserver.xml data/config/webserver.xml
-index c71f714e0..1641fcdd3 100644
---- data/config/webserver.xml
-+++ data/config/webserver.xml
-@@ -16,7 +16,7 @@
- 
- <params name="webserver" type="param" mode="mw" version="2">
- 	<section name="WebServer Settings">
--		<attstr name="url" val="http://www.madbad.altervista.org/speed-dreams/webserver.php"/>
-+		<attstr name="url" val="http://sdmasterserver.soon.it/webserver"/>
- 	</section>
- </params>
- 
 diff --git src/drivers/simplix/src/unitclothoid.cpp src/drivers/simplix/src/unitclothoid.cpp
 index 647632e87..d1d80dfc0 100644
 --- src/drivers/simplix/src/unitclothoid.cpp
