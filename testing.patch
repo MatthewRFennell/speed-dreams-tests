@@ -1,0 +1,458 @@
+diff --git CMakeLists.txt CMakeLists.txt
+index 84f712d99..2cf8defad 100644
+--- CMakeLists.txt
++++ CMakeLists.txt
+@@ -191,10 +191,15 @@ SET_PROPERTY(GLOBAL PROPERTY SD_ROBOT_LIST "")
+ SET_PROPERTY(GLOBAL PROPERTY SD_OSG_PLUGIN_LIST "")
+ SET_PROPERTY(GLOBAL PROPERTY SD_EXE_LIST "")
+ 
++IF(OPTION_AUTOMATED_TESTING)
++   ENABLE_TESTING()
++ENDIF(OPTION_AUTOMATED_TESTING)
++
+ # Sub-dirs to build ...
+ ADD_SUBDIRECTORY(src)
+ ADD_SUBDIRECTORY(data)
+ ADD_SUBDIRECTORY(cmake)
++ADD_SUBDIRECTORY(test)
+ 
+ # After the user settings files have been collected,
+ # Update (and then install) version.xml from their respective version.
+diff --git INSTALL.txt INSTALL.txt
+index 1295107a5..33c3387b3 100644
+--- INSTALL.txt
++++ INSTALL.txt
+@@ -55,6 +55,7 @@ As of version 2.2, you will also need:
+ As of version 2.2.4?? , you will also need:
+ - SDL2_mixer 2.0.4 (https://www.libsdl.org/projects/SDL_mixer)A
+ 
++You will also need GMock and GTest (https://github.com/google/googletest), if you plan to run automated tests against the codebase.
+ 
+ WARNING: Under Windows, be careful to compile everything for multi-threaded DLL integration (/MD[d])
+ 
+@@ -74,6 +75,8 @@ On a fresh install of Linux Mint 19 the following packages were needed to be ins
+ - libpng-dev
+ - libcurl4-openssl-dev
+ - subversion (only when you want to build the development version from the repository)
++- libgtest-dev (only when you want to run the automated tests)
++- libgmock-dev (only when you want to run the automated tests)
+ These will install all other required packages as their dependencies.
+ 
+ 
+@@ -250,6 +253,10 @@ The Speed Dreams Team.
+             Enable the WIP Webserver/Laplogger (def: ON)
+             (see http://sourceforge.net/p/speed-dreams/tickets/912).
+ 
++        - OPTION_AUTOMATED_TESTING:BOOL :
++            Enable the running of automated tests against the code (def: OFF)
++            This will require GMock and GTest to be installed.
++
+         Tips reported about some issues :
+         - sometimes, ENET_INCLUDE_DIR is not detected correctly, resulting in something like
+           /usr/include/enet or so, and, consequently, in bad compilation errors because
+@@ -323,6 +330,11 @@ The Speed Dreams Team.
+         where <user settings> is what you set in SD_LOCALDIR,
+         by default it is ~/.speed-dreams-2.
+ 
++  Note: Running the automated tests:
++        Once you have instsalled gtest and gmock, and compiled with the
++        OPTION_AUTOMATED_TESTING flag on, you can run ctest from the build
++        directory to run the tests.
++
+ 5 - Known run-time issues :
+ 
+   * Under some Linux configurations, the game crashes after restarting a race,
+diff --git cmake/FindGMock.cmake cmake/FindGMock.cmake
+new file mode 100644
+index 000000000..2ad922129
+--- /dev/null
++++ cmake/FindGMock.cmake
+@@ -0,0 +1,130 @@
++# Locate the Google C++ Mocking Framework.
++# (This file is almost an identical copy of the original FindGTest.cmake file,
++#  feel free to use it as it is or modify it for your own needs.)
++#
++#
++# Defines the following variables:
++#
++#   GMOCK_FOUND - Found the Google Testing framework
++#   GMOCK_INCLUDE_DIRS - Include directories
++#
++# Also defines the library variables below as normal
++# variables. These contain debug/optimized keywords when
++# a debugging library is found.
++#
++#   GMOCK_BOTH_LIBRARIES - Both libgmock & libgmock-main
++#   GMOCK_LIBRARIES - libgmock
++#   GMOCK_MAIN_LIBRARIES - libgmock-main
++#
++# Accepts the following variables as input:
++#
++#   GMOCK_ROOT - (as a CMake or environment variable)
++#                The root directory of the gmock install prefix
++#
++#   GMOCK_MSVC_SEARCH - If compiling with MSVC, this variable can be set to
++#                       "MD" or "MT" to enable searching a gmock build tree
++#                       (defaults: "MD")
++#
++#-----------------------
++# Example Usage:
++#
++#    find_package(GMock REQUIRED)
++#    include_directories(${GMOCK_INCLUDE_DIRS})
++#
++#    add_executable(foo foo.cc)
++#    target_link_libraries(foo ${GMOCK_BOTH_LIBRARIES})
++#
++#=============================================================================
++# This file is released under the MIT licence:
++#
++# Copyright (c) 2011 Matej Svec
++#
++# Permission is hereby granted, free of charge, to any person obtaining a copy
++# of this software and associated documentation files (the "Software"), to
++# deal in the Software without restriction, including without limitation the
++# rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
++# sell copies of the Software, and to permit persons to whom the Software is
++# furnished to do so, subject to the following conditions:
++#
++# The above copyright notice and this permission notice shall be included in
++# all copies or substantial portions of the Software.
++#
++# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
++# IN THE SOFTWARE.
++#=============================================================================
++
++
++function(_gmock_append_debugs _endvar _library)
++  if(${_library} AND ${_library}_DEBUG)
++    set(_output optimized ${${_library}} debug ${${_library}_DEBUG})
++  else()
++    set(_output ${${_library}})
++  endif()
++  set(${_endvar} ${_output} PARENT_SCOPE)
++endfunction()
++
++function(_gmock_find_library _name)
++  find_library(${_name}
++    NAMES ${ARGN}
++    HINTS
++      $ENV{GMOCK_ROOT}
++      ${GMOCK_ROOT}
++    PATH_SUFFIXES ${_gmock_libpath_suffixes}
++  )
++  mark_as_advanced(${_name})
++endfunction()
++
++
++if(NOT DEFINED GMOCK_MSVC_SEARCH)
++  set(GMOCK_MSVC_SEARCH MD)
++endif()
++
++set(_gmock_libpath_suffixes lib)
++if(MSVC)
++  if(GMOCK_MSVC_SEARCH STREQUAL "MD")
++    list(APPEND _gmock_libpath_suffixes
++      msvc/gmock-md/Debug
++      msvc/gmock-md/Release)
++  elseif(GMOCK_MSVC_SEARCH STREQUAL "MT")
++    list(APPEND _gmock_libpath_suffixes
++      msvc/gmock/Debug
++      msvc/gmock/Release)
++  endif()
++endif()
++
++find_path(GMOCK_INCLUDE_DIR gmock/gmock.h
++  HINTS
++    $ENV{GMOCK_ROOT}/include
++    ${GMOCK_ROOT}/include
++)
++mark_as_advanced(GMOCK_INCLUDE_DIR)
++
++if(MSVC AND GMOCK_MSVC_SEARCH STREQUAL "MD")
++  # The provided /MD project files for Google Mock add -md suffixes to the
++  # library names.
++  _gmock_find_library(GMOCK_LIBRARY            gmock-md  gmock)
++  _gmock_find_library(GMOCK_LIBRARY_DEBUG      gmock-mdd gmockd)
++  _gmock_find_library(GMOCK_MAIN_LIBRARY       gmock_main-md  gmock_main)
++  _gmock_find_library(GMOCK_MAIN_LIBRARY_DEBUG gmock_main-mdd gmock_maind)
++else()
++  _gmock_find_library(GMOCK_LIBRARY            gmock)
++  _gmock_find_library(GMOCK_LIBRARY_DEBUG      gmockd)
++  _gmock_find_library(GMOCK_MAIN_LIBRARY       gmock_main)
++  _gmock_find_library(GMOCK_MAIN_LIBRARY_DEBUG gmock_maind)
++endif()
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(GMock DEFAULT_MSG GMOCK_LIBRARY GMOCK_INCLUDE_DIR GMOCK_MAIN_LIBRARY)
++
++if(GMOCK_FOUND)
++  set(GMOCK_INCLUDE_DIRS ${GMOCK_INCLUDE_DIR})
++  _gmock_append_debugs(GMOCK_LIBRARIES      GMOCK_LIBRARY)
++  _gmock_append_debugs(GMOCK_MAIN_LIBRARIES GMOCK_MAIN_LIBRARY)
++  set(GMOCK_BOTH_LIBRARIES ${GMOCK_LIBRARIES} ${GMOCK_MAIN_LIBRARIES})
++endif()
++
+diff --git cmake/checks.cmake cmake/checks.cmake
+index 720804445..d9ce1f08a 100644
+--- cmake/checks.cmake
++++ cmake/checks.cmake
+@@ -347,5 +347,24 @@ MACRO(CHECK_LIBRARIES)
+ 
+ 	ENDIF(OPTION_3RDPARTY_SQLITE3)
+ 
++	# GTest and GMock
++	IF(OPTION_AUTOMATED_TESTING)
++		Find_Package(GTest)
++		IF(GTEST_FOUND)
++			SET(HAVE_GTEST 1)
++			MESSAGE(STATUS "Looking for library GoogleTest - found")
++		ELSE(GTEST_FOUND)
++			MESSAGE(STATUS "Looking for library GoogleTest - NOT found")
++		ENDIF(GTEST_FOUND)
++
++		Find_Package(GMock)
++		IF(GMOCK_FOUND)
++			SET(HAVE_GMOCK 1)
++			MESSAGE(STATUS "Looking for library GoogleMock - found")
++		ELSE(GMOCK_FOUND)
++			MESSAGE(STATUS "Looking for library GoogleMock - NOT found")
++		ENDIF(GMOCK_FOUND)
++	ENDIF(OPTION_AUTOMATED_TESTING)
++
+ ENDMACRO(CHECK_LIBRARIES)
+ 
+diff --git cmake/config.h.in.cmake cmake/config.h.in.cmake
+index 5067351a1..62be8550a 100755
+--- cmake/config.h.in.cmake
++++ cmake/config.h.in.cmake
+@@ -183,4 +183,5 @@
+ #define SD_LIBDIR "${SD_LIBDIR}/"
+ #define SD_BINDIR "${SD_BINDIR}/"
+ #define SD_LOCALDIR "${SD_LOCALDIR}/"
++#define SD_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}/"
+ 
+diff --git cmake/options.cmake cmake/options.cmake
+index 2ce930af2..3a215916a 100644
+--- cmake/options.cmake
++++ cmake/options.cmake
+@@ -64,6 +64,8 @@ MACRO(ADD_SD_COMPILE_OPTIONS)
+ 
+     SET(OPTION_OFFICIAL_ONLY false CACHE BOOL "Build / install only officially released contents")
+ 
++    SET(OPTION_AUTOMATED_TESTING false CACHE BOOL "Enable automated testing using GoogleTest (this requires GTest and GMock to be installed)")
++
+     SET(OPTION_FORCE_DEBUG false CACHE BOOL "Force debug symbols even in Release build (Automatic in Debug builds)")
+ 
+     SET(OPTION_TRACE true CACHE BOOL "Enable traces into the console or log file")
+diff --git src/drivers/simplix/src/unitclothoid.cpp src/drivers/simplix/src/unitclothoid.cpp
+index 647632e87..d1d80dfc0 100644
+--- src/drivers/simplix/src/unitclothoid.cpp
++++ src/drivers/simplix/src/unitclothoid.cpp
+@@ -263,8 +263,8 @@ void TClothoidLane::AnalyseBumps(bool DumpInfo)
+         Dt = 1.00;
+ 
+       Pz = oPathPoints[J].Point.z;
+-      Sz += Vz * Dt - 0.5 * G * Dt * Dt;
+-      Vz -= G * Dt;
++      Sz += Vz * Dt - 0.5 * EARTH_GRAVITY * Dt * Dt;
++      Vz -= EARTH_GRAVITY * Dt;
+ 
+       if (Sz <= Pz)
+       {
+diff --git src/drivers/simplix/src/unitdriver.cpp src/drivers/simplix/src/unitdriver.cpp
+index 24d7f1997..39c9610c1 100644
+--- src/drivers/simplix/src/unitdriver.cpp
++++ src/drivers/simplix/src/unitdriver.cpp
+@@ -4251,7 +4251,7 @@ double TDriver::FilterBrakeSpeed(double	Brake)
+ 	if	(Param.Fix.oCa < 0.01)
+ 		return Brake;
+ 
+-	float WF =	(float)	(Param.Tmp.oMass * G / Param.Fix.oCa);
++	float WF =	(float)	(Param.Tmp.oMass * EARTH_GRAVITY / Param.Fix.oCa);
+ 	float F2 =	WF + 10000;
+ 	float F1 =	(float)	(WF	+ oCurrSpeed * oCurrSpeed);
+ 	return	Brake *	F1/F2;
+diff --git src/drivers/simplix/src/unitfixcarparam.cpp src/drivers/simplix/src/unitfixcarparam.cpp
+index 3fc25ab5c..45dba5112 100644
+--- src/drivers/simplix/src/unitfixcarparam.cpp
++++ src/drivers/simplix/src/unitfixcarparam.cpp
+@@ -127,9 +127,9 @@ double TFixCarParam::CalcAcceleration(
+   if (Crvz > 0)
+ 	Crvz =	0;
+ 
+-  double Gdown = G * cos(TrackRollAngle);
+-  double Glat =	G *	sin(TrackRollAngle);
+-  double Gtan  = - G * sin(TrackTiltAngle);
++  double Gdown = EARTH_GRAVITY * cos(TrackRollAngle);
++  double Glat =	EARTH_GRAVITY *	sin(TrackRollAngle);
++  double Gtan  = - EARTH_GRAVITY * sin(TrackTiltAngle);
+ 
+   double U = Speed;
+   double V = U;
+@@ -216,9 +216,9 @@ double TFixCarParam::CalcBraking
+   if (Crvz > 0)
+ 	Crvz =	0;
+ 
+-  double Gdown = G * cos(TrackRollAngle) * cos(TrackTiltAngle);
+-  double Glat  = fabs(G	* sin(TrackRollAngle));
+-  double Gtan  = - G * sin(TrackTiltAngle);
++  double Gdown = EARTH_GRAVITY * cos(TrackRollAngle) * cos(TrackTiltAngle);
++  double Glat  = fabs(EARTH_GRAVITY	* sin(TrackRollAngle));
++  double Gtan  = - EARTH_GRAVITY * sin(TrackTiltAngle);
+ 
+   double V = Speed;
+   double U = V;
+@@ -328,9 +328,9 @@ double	TFixCarParam::CalcBrakingPit
+   if (Crvz > 0)
+ 	Crvz =	0;
+ 
+-  double Gdown = G * cos(TrackRollAngle);
+-  double Glat  = G * sin(TrackRollAngle);
+-  double Gtan  = - G * sin(TrackTiltAngle);
++  double Gdown = EARTH_GRAVITY * cos(TrackRollAngle);
++  double Glat  = EARTH_GRAVITY * sin(TrackRollAngle);
++  double Gtan  = - EARTH_GRAVITY * sin(TrackTiltAngle);
+ 
+   double V = Speed;
+   double U = V;
+@@ -477,7 +477,7 @@ double TFixCarParam::CalcMaxSpeed
+ 	  }
+   }
+ 
+-  double Speed = factor	* sqrt((Cos	* G	* Mu + Sin * G * SGN(Crv0) + CrvZ) / Den);
++  double Speed = factor	* sqrt((Cos	* EARTH_GRAVITY	* Mu + Sin * EARTH_GRAVITY * SGN(Crv0) + CrvZ) / Den);
+   if (oDriver->CarCharacteristic.IsValidX(Speed))
+ 	Speed *= oDriver->CarCharacteristic.CalcOffset(Speed);
+ 
+@@ -493,7 +493,7 @@ double TFixCarParam::CalcMaxSpeed
+ double TFixCarParam::CalcMaxLateralF
+   (double Speed, double	Friction, double Crvz) const
+ {
+-  double Fdown = oTmpCarParam->oMass * G
++  double Fdown = oTmpCarParam->oMass * EARTH_GRAVITY
+ 	+ (oTmpCarParam->oMass	* Crvz + oCa) *	Speed *	Speed;
+   return Fdown * Friction *	oTyreMu;
+ }
+@@ -505,7 +505,7 @@ double TFixCarParam::CalcMaxLateralF
+ double TFixCarParam::CalcMaxSpeedCrv() const
+ {
+   const	double MAX_SPD = 112; // 400 km/h
+-  return G * oTyreMu / (MAX_SPD	* MAX_SPD);
++  return EARTH_GRAVITY * oTyreMu / (MAX_SPD	* MAX_SPD);
+ }
+ //==========================================================================*
+ 
+diff --git src/drivers/simplix/src/unitglobal.h src/drivers/simplix/src/unitglobal.h
+index 2b5bc9078..fde553cb7 100644
+--- src/drivers/simplix/src/unitglobal.h
++++ src/drivers/simplix/src/unitglobal.h
+@@ -267,7 +267,7 @@ enum
+ // ... Array sizes
+ 
+ // my own planet ...
+-#define	G 9.81									 // Hello earth gravity
++#define	EARTH_GRAVITY 9.81									 // Hello earth gravity
+ // ... my own planet
+ 
+ // pit states ...
+diff --git test/CMakeLists.txt test/CMakeLists.txt
+new file mode 100644
+index 000000000..dfd6d53da
+--- /dev/null
++++ test/CMakeLists.txt
+@@ -0,0 +1,24 @@
++ENABLE_TESTING()
++
++ADD_EXECUTABLE(
++	racemanager_test
++	racemanager_test.cpp
++)
++
++ADD_SDLIB_INCLUDEDIR(tgf tgfclient tgfdata math portability)
++ADD_SDL2_INCLUDEDIR()
++
++TARGET_LINK_LIBRARIES(
++	racemanager_test
++	tgf
++	tgfclient
++	tgfdata
++	gtest
++	gtest_main
++	gmock
++	gmock_main
++	pthread
++)
++
++INCLUDE(GoogleTest)
++GTEST_DISCOVER_TESTS(racemanager_test)
+diff --git test/racemanager_test.cpp test/racemanager_test.cpp
+new file mode 100644
+index 000000000..bda373e8a
+--- /dev/null
++++ test/racemanager_test.cpp
+@@ -0,0 +1,59 @@
++#include <gtest/gtest.h>
++#include <gmock/gmock.h>
++#include <racemanagers.h>
++#include <tgf.hpp>
++#include <tgfclient.h>
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++#endif
++
++using ::testing::Contains;
++using ::testing::Not;
++
++class RaceManagerTest : public ::testing::Test {
++	protected:
++		RaceManagerTest() {
++			app = new GfuiApplication("Speed Dreams", 0, "");
++			char path[PATH_MAX_SIZE];
++#ifdef HAVE_CONFIG_H
++			std::snprintf(
++					path, PATH_MAX_SIZE, "%s%s%s", SD_INSTALL_PREFIX, SD_BINDIR, SD_BINARY
++			);
++#endif
++			char *args[1] = {path};
++			app->initialize(true, 1, args);
++			app->parseOptions();
++			chdir(GfDataDir());
++			app->updateUserSettings();
++		}
++
++		~RaceManagerTest() {
++			free(app);
++		}
++
++		static constexpr const char *const NETWORK_RACE_MANAGER = "Network";
++		static constexpr const char *const ONLINE_RACE_MANAGER = "Online";
++		static constexpr const char *const SD_BINARY = "speed-dreams-2";
++		static constexpr const int PATH_MAX_SIZE = 1024;
++
++		GfApplication *app;
++};
++
++TEST_F(RaceManagerTest, ShouldHaveCorrectOnlineTypeForTheSelectedMode) {
++#ifndef HAVE_CONFIG_H
++	FAIL() << "config.h not found - couldn't generate path variable";
++#endif
++	const std::vector<std::string>& types = GfRaceManagers::self()->getTypes();
++	const char *allowedOnlineRaceManagerType;
++	const char *disallowedOnlineRaceManagerType;
++#ifdef CLIENT_SERVER
++	allowedOnlineRaceManagerType = NETWORK_RACE_MANAGER;
++	disallowedOnlineRaceManagerType = ONLINE_RACE_MANAGER;
++#else
++	allowedOnlineRaceManagerType = ONLINE_RACE_MANAGER;
++	disallowedOnlineRaceManagerType = NETWORK_RACE_MANAGER;
++#endif
++	EXPECT_THAT(types, Contains(allowedOnlineRaceManagerType));
++	EXPECT_THAT(types, Not(Contains(disallowedOnlineRaceManagerType)));
++}
